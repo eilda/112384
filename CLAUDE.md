@@ -17,6 +17,12 @@
 - 심사원 교육 워크숍 **모범답안** 작성 → `iso-model-answer` 스킬
 - 조항별 **요약 정리** → `clause-summary` 스킬
 
+## 업무 도구 (tools/)
+- 비품 리스트·기기 현황 정리 → `asset-ledger` 스킬 (`tools/asset_ledger.py`)
+- 업체 제안서 비교·비교견적서 → `quote-compare` 스킬 (`tools/quote_compare.py`)
+- 숫자 계산·엑셀 서식은 직접 어림하지 말고 이 스크립트로 처리한다.
+- 공개 저장소이므로 업체명·금액·직원 정보 같은 실제 데이터는 커밋하지 않는다.
+
 ## 파일 정리 규칙
 - 답안: `answers/<표준>/<주제>.md`
 - 조항 요약: `notes/<표준>/<조항번호>.md`
