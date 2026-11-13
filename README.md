@@ -12,7 +12,17 @@ ISO 학습 자료와 업무 자동화 도구 저장소. Claude 세션에 연결�
 | `.claude/skills/quote-compare/` | 비교견적서 작업 절차 |
 | `.claude/skills/iso-model-answer/` | ISO 워크숍 모범답안 작성 절차 |
 | `.claude/skills/clause-summary/` | ISO 조항별 요약 정리 절차 |
+| `apps/inventory/index.html` | 비품관리 프로그램 (QR 라벨 인쇄, 감가상각, admin/staff 권한) |
 | `answers/`, `notes/` | ISO 답안·조항 노트 |
+
+## 비품관리 프로그램 (`apps/inventory/`)
+- `index.html` 파일 하나를 브라우저(크롬·엣지)로 열면 바로 실행된다. 안드로이드 앱(WebView)에서도 쓴다.
+- **비밀번호는 코드에 없다.** 처음 실행할 때 `처음 사용 설정` 화면에서 admin·staff 비밀번호를 정한다.
+  - 기기 안에 솔트+SHA-256 해시로만 저장 (`localStorage`의 `tbz_auth_v1`)
+  - 데이터가 기기별로 저장되므로 비밀번호도 기기마다 따로 설정한다.
+  - 변경: 관리자로 로그인 → 상단 열쇠 아이콘
+  - 분실 시: 브라우저 개발자도구 → Application → Local Storage에서 `tbz_auth_v1`만 삭제하면 설정 화면이 다시 뜬다 (비품 데이터는 유지).
+- 비품 데이터는 기기 브라우저에만 저장된다. 저장소에는 실제 비품 데이터를 올리지 않는다.
 
 ## 도구 사용법
 ```bash
