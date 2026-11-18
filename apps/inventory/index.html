@@ -29,6 +29,11 @@
         .x-scount{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:700;color:#94a3b8;background:#f1f5f9;padding:3px 9px;border-radius:999px;white-space:nowrap;cursor:default}
         .x-scount.on{background:#eef2ff;color:#4338ca}
         .x-scount.zero{background:#fff1f2;color:#be123c}
+        .x-syncbadge{border:0;background:#f0fdf4;color:#047857;font-size:11.5px;font-weight:700;border-radius:999px;padding:7px 11px;margin-left:6px;cursor:pointer;white-space:nowrap;font-family:inherit}
+        .x-syncbadge.bad{background:#fff1f2;color:#be123c}
+        .x-menu-wrap{display:flex;align-items:center}
+        .x-desc.ok{color:#047857;font-weight:700}.x-desc.bad{color:#be123c;font-weight:700}
+        .x-qrname{font-size:19px;font-weight:800;color:#0f172a;margin:6px 0 16px;line-height:1.35}
         .x-sub{font-size:11px;color:#94a3b8;font-weight:600;margin-top:2px;white-space:nowrap}
         .x-link{border:0;background:none;color:#4f46e5;font-weight:700;font-size:13px;cursor:pointer;text-decoration:underline;font-family:inherit}
         .x-chips{display:flex;flex-wrap:wrap;gap:8px}
@@ -325,6 +330,7 @@
                                 <button onclick="toggleDataMenu(event)" class="flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold rounded-xl transition whitespace-nowrap bg-slate-100 hover:bg-slate-200 text-slate-700" title="백업·엑셀·휴지통·설정">
                                     <i data-lucide="database" class="w-4 h-4"></i> 데이터 관리 <i data-lucide="chevron-down" class="w-4 h-4"></i>
                                 </button>
+                                <button id="syncBadge" class="x-syncbadge" style="display:none" onclick="syncNow(false)"></button>
                                 <div id="dataMenu" class="x-menu">
                                     <p>백업 (기기 간 옮기기)</p>
                                     <button onclick="exportData()"><i data-lucide="download"></i> 백업 파일 저장</button>
@@ -335,6 +341,10 @@
                                     <button onclick="openReport()"><i data-lucide="calculator"></i> 감가상각 보고서</button>
                                     <label><i data-lucide="file-up"></i> 엑셀 일괄 등록·수정 (대장 자동 변환)<input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)" hidden></label>
                                     <button onclick="downloadTemplate()"><i data-lucide="file-down"></i> 일괄 등록 양식 받기</button>
+                                    <hr>
+                                    <p>여러 기기 함께 쓰기</p>
+                                    <button onclick="openSyncSettings()"><i data-lucide="cloud"></i> 공유 서버 연결</button>
+                                    <button onclick="closeDataMenu();syncNow(false)"><i data-lucide="refresh-cw"></i> 지금 동기화</button>
                                     <hr class="x-admin-item">
                                     <button class="x-admin-item" onclick="openTrash()"><i data-lucide="trash-2"></i> 휴지통</button>
                                     <button class="x-admin-item" onclick="openSettings()"><i data-lucide="settings"></i> 설정</button>
@@ -757,6 +767,31 @@
 
     <datalist id="locList"></datalist>
     <datalist id="userList"></datalist>
+
+    <!-- 공유 서버 연결 -->
+    <div id="syncModal" class="x-modal" onclick="if(event.target===this)closeModal('syncModal')">
+        <div class="x-box">
+            <h3>공유 서버 연결</h3>
+            <p class="x-desc">구글 앱스 스크립트로 만든 서버에 연결하면, 같은 팀 코드를 쓰는 PC·휴대폰끼리 비품 데이터가 자동으로 합쳐집니다. 사진과 로그인 비밀번호는 기기마다 따로 보관됩니다.</p>
+            <label class="x-f"><span>서버 주소 (웹 앱 URL)</span><input id="syUrl" class="x-in" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
+            <label class="x-f"><span>팀 코드</span><input id="syCode" class="x-in" type="password" autocomplete="off" placeholder="서버 코드에 적은 TEAM_CODE"></label>
+            <p id="syStatus" class="x-desc"></p>
+            <div class="x-foot">
+                <button class="x-btn sec" id="syDisconnect" onclick="syncDisconnect()">연결 끊기</button>
+                <button class="x-btn sec" onclick="syncTest()">연결 확인</button>
+                <button class="x-btn pri" onclick="syncSave()">저장하고 동기화</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR로 열었을 때: 이 기기에 없는 비품 정보 -->
+    <div id="qrInfoModal" class="x-modal" onclick="if(event.target===this)closeModal('qrInfoModal')">
+        <div class="x-box">
+            <h3>비품 정보 (QR 조회)</h3>
+            <div id="qrInfoBody"></div>
+            <div class="x-foot"><button class="x-btn sec" onclick="closeModal('qrInfoModal')">닫기</button></div>
+        </div>
+    </div>
 
     <!-- 지급·대여 -->
     <div id="checkoutModal" class="x-modal" onclick="if(event.target===this)closeModal('checkoutModal')">
@@ -1273,6 +1308,7 @@
 
         // 비품·휴지통 저장 (메모리의 현재 상태를 그대로 기록)
         function saveToDB() {
+            scheduleSync();   // 공유 서버에 연결돼 있으면 잠시 뒤 자동 동기화
             if (storageMode !== 'idb') {
                 try {
                     localStorage.setItem(DB_KEY, JSON.stringify(assets));
@@ -1303,6 +1339,7 @@
         }
         // 담당자·분류·설정·재물조사 저장
         function saveMeta(key, value) {
+            scheduleSync();
             if (storageMode !== 'idb') {
                 const lsKey = key === 'managers' ? MGR_KEY : key === 'categories' ? CAT_KEY : 'tbz_' + key;
                 try { localStorage.setItem(lsKey, JSON.stringify(value)); } catch (e) { saveFailed(e); }
@@ -1415,7 +1452,7 @@
             return head + (seq < 10 ? '00' : seq < 100 ? '0' : '') + seq;
         }
         function findByCode(code) {
-            const c = String(code || '').trim();
+            const c = codeFromText(code);   // QR 주소(…#a=ID)도 그대로 인식
             return assets.find(a => a.id === c) || assets.find(a => a.assetNo && a.assetNo.toLowerCase() === c.toLowerCase());
         }
 
@@ -1495,11 +1532,14 @@
             await loadAll();
             fillLoginManagers();
             fillCategorySelects();
+            qrPendingId = readQrHash();   // QR(주소)로 들어온 경우
             // 새로고침해도 같은 탭에서는 로그인 유지
             try {
                 const s = JSON.parse(sessionStorage.getItem(SESSION_KEY));
                 if (loadAuth() && s && (s.role === 'admin' || s.role === 'staff')) { currentUser = s; enterApp(); }
             } catch (e) {}
+            // 로그인 전: 이 기기에 없는 비품이면 공유 서버에서 기본 정보를 바로 보여줌 (로그인하면 상세 화면으로)
+            if (!currentUser && qrPendingId && !assets.some(a => a.id === qrPendingId)) showQrLookup(qrPendingId);
         });
         // Esc 키로 열린 창 닫기
         window.addEventListener('keydown', e => {
@@ -1557,6 +1597,9 @@
                 try { history.pushState({ app: 1 }, ''); appPushed = true; } catch (e) {}
             }
             showDashboard();
+            renderSyncBadge();
+            if (qrPendingId || readQrHash()) handleQrOpen();
+            else if (syncOn()) syncNow(true);
         }
 
         // 안드로이드 뒤로가기 버튼이 부를 함수
@@ -1903,6 +1946,7 @@
 
         window.addEventListener('popstate', () => {
             if (ignorePop) { ignorePop = false; return; }
+            if (readQrHash()) return;   // QR 주소(#a=…)로 바뀐 것은 hashchange에서 처리
             const main = document.getElementById('mainLayout');
             if (!main || main.classList.contains('hidden') || !currentUser) return;
             if (navPushed) { navPushed = false; returnToList(); return; }
@@ -2548,7 +2592,7 @@
             // QR 생성 (내용은 시스템 ID 그대로 → 이미 붙여둔 라벨과 호환)
             const qrBox = document.getElementById('qrDisplay');
             qrBox.innerHTML = '';
-            if (typeof QRCode !== 'undefined') new QRCode(qrBox, { text: id, width: 140, height: 140, colorDark: "#1e293b" });
+            if (typeof QRCode !== 'undefined') new QRCode(qrBox, { text: qrPayload(id), width: 160, height: 160, colorDark: "#1e293b", correctLevel: QRCode.CorrectLevel.M });
             else qrBox.innerHTML = '<p class="x-desc" style="margin:0">QR 도구를 불러오지 못했습니다.<br>인터넷 연결을 확인해주세요.</p>';
         }
 
@@ -3831,6 +3875,241 @@
             xlsxSave(wb, `재물조사결과_${au.title.replace(/[\\/:*?"<>|\s]/g, '_')}.xlsx`);
         }
 
+        // =====================================================================
+        // 공유 서버 (구글 앱스 스크립트) 동기화 · QR 주소 · QR 조회
+        // =====================================================================
+        // 이 두 값은 배포 후 한 번 채워 넣습니다. (팀 코드는 여기에 쓰지 않음)
+        const SITE_URL = 'https://eilda.github.io/112384/apps/inventory/';   // QR에 들어갈 사이트 주소
+        const SYNC_DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbxpAWj4KPwjX0EN9WZl1XZFpTUIdEckxsXiUwqwknG67z9YuEsApay5V_HsqE8RTFyyVQ/exec';   // 앱스 스크립트 웹 앱 주소 — 비워두면 각 기기에서 직접 입력
+
+        const SYNC_KEY = 'tbz_sync';    // 이 기기의 서버 주소·팀 코드 (백업 파일에는 넣지 않음)
+        let syncState = { busy: false, pending: false, lastAt: 0, version: 0, lastPushed: '', error: '' };
+        let syncApplying = false;       // 서버 데이터를 반영하는 중에는 저장 → 동기화 예약을 하지 않음
+        let syncTimer = null;
+
+        function syncCfg() {
+            let s = {};
+            try { s = JSON.parse(localStorage.getItem(SYNC_KEY)) || {}; } catch (e) {}
+            return { url: (s.url || SYNC_DEFAULT_URL || '').trim(), code: s.code || '', version: s.version || 0 };
+        }
+        function syncSaveCfg(c) {
+            try { localStorage.setItem(SYNC_KEY, JSON.stringify(c)); } catch (e) {}
+        }
+        function syncOn() { const c = syncCfg(); return !!(c.url && c.code); }
+
+        async function syncApi(payload, url) {
+            const u = url || syncCfg().url;
+            if (!u) throw new Error('서버 주소가 없습니다.');
+            // Content-Type을 지정하지 않아야(text/plain) 사전 확인 없이 바로 전송됨
+            const r = await fetch(u, { method: 'POST', body: JSON.stringify(payload), redirect: 'follow' });
+            if (!r.ok) throw new Error('서버 응답 오류 (' + r.status + ')');
+            return r.json();
+        }
+
+        // 서버로 보낼 데이터: 사진·비밀번호 제외
+        function syncPayload() {
+            const strip = list => list.map(a => { const c = Object.assign({}, a); delete c.image; return c; });
+            return {
+                app: 'tripbtoz-inventory', version: 2,
+                assets: strip(assets), trash: strip(trash), managers: managers, categories: categories, audits: audits,
+                settings: { prefix: settings.prefix, depBasis: settings.depBasis, remindDays: settings.remindDays, updatedAt: settings.updatedAt }
+            };
+        }
+
+        // 저장할 때마다 몇 초 뒤 자동 동기화
+        function scheduleSync() {
+            if (syncApplying || !syncOn()) return;
+            clearTimeout(syncTimer);
+            syncTimer = setTimeout(() => syncNow(true), 3000);
+            renderSyncBadge();
+        }
+
+        async function syncNow(quiet) {
+            if (!syncOn() || !currentUser) return false;
+            if (syncState.busy) { syncState.pending = true; return false; }
+            syncState.busy = true; syncState.error = '';
+            renderSyncBadge();
+            const c = syncCfg();
+            let ok = false, merged = null;
+            try {
+                for (let tryNo = 0; tryNo < 3; tryNo++) {
+                    const r = await syncApi({ action: 'pull', code: c.code });
+                    if (!r.ok) throw new Error(r.error || '불러오기 실패');
+                    if (r.data && Array.isArray(r.data.assets)) {
+                        // 서버에는 사진이 없으므로, 이 기기의 사진은 그대로 유지
+                        const localImg = {};
+                        assets.concat(trash).forEach(a => { if (a.image) localImg[a.id] = a.image; });
+                        r.data.assets.forEach(a => { if (a && a.image === undefined) a.image = localImg[a.id] || ''; });
+                        (r.data.trash || []).forEach(a => { if (a && a.image === undefined && localImg[a.id]) a.image = localImg[a.id]; });
+                        syncApplying = true;
+                        try {
+                            merged = mergeBackup(r.data, false);
+                            saveToDB(); saveManagers(); saveCategories(); saveAudits(); saveSettings(false);
+                        } finally { syncApplying = false; }
+                    }
+                    const body = JSON.stringify(syncPayload());
+                    if (body === syncState.lastPushed && r.version === syncState.version) { ok = true; break; }   // 바뀐 것 없음
+                    const w = await syncApi({ action: 'push', code: c.code, baseVersion: r.version || 0, by: currentUser.name, data: JSON.parse(body) });
+                    if (w.ok) { syncState.version = w.version; syncState.lastPushed = body; ok = true; break; }
+                    if (!w.conflict && !w.busy) throw new Error(w.error || '저장 실패');
+                    await new Promise(res => setTimeout(res, 800 + tryNo * 800));   // 다른 사람이 먼저 저장 → 다시 받아서 합침
+                }
+                if (!ok) throw new Error('다른 사람이 계속 저장 중입니다. 잠시 후 다시 시도하세요.');
+                syncState.lastAt = Date.now();
+                syncSaveCfg(Object.assign(syncCfg(), { version: syncState.version, lastAt: syncState.lastAt }));
+            } catch (e) {
+                syncState.error = (e && e.message) ? e.message : String(e);
+                if (!quiet) toast('동기화 실패: ' + syncState.error, 'err');
+            } finally {
+                syncState.busy = false;
+            }
+            // 화면 갱신 (입력 중인 등록·수정 화면은 건드리지 않음)
+            if (ok && merged && (merged.added || merged.updated || merged.removed)) {
+                fillLoginManagers(); fillCategorySelects();
+                if (!$('dashboardView').classList.contains('hidden')) renderList();
+                else if (!$('auditView').classList.contains('hidden')) renderAudit();
+                else if (!$('detailView').classList.contains('hidden') && currentDetailId && assets.some(a => a.id === currentDetailId)) showDetail(currentDetailId);
+                if (!quiet) toast('동기화 완료 · 새로 받음 ' + merged.added + ' · 갱신 ' + merged.updated + (merged.removed ? ' · 삭제 반영 ' + merged.removed : ''));
+            } else if (ok && !quiet) toast('동기화 완료 · 바뀐 내용 없음');
+            renderSyncBadge();
+            if (syncState.pending) { syncState.pending = false; setTimeout(() => syncNow(true), 500); }
+            return ok;
+        }
+
+        // 데이터 관리 버튼 옆 동기화 상태 표시
+        function renderSyncBadge() {
+            const el = $('syncBadge');
+            if (!el) return;
+            if (!syncOn()) { el.style.display = 'none'; return; }
+            el.style.display = '';
+            let t, cls = '';
+            if (syncState.busy) t = '동기화 중…';
+            else if (syncState.error) { t = '동기화 실패 · 다시 시도'; cls = 'bad'; }
+            else if (syncTimer && !syncState.lastAt) t = '동기화 대기';
+            else if (syncState.lastAt) t = '동기화됨 ' + fmtDateTime(syncState.lastAt).slice(11);
+            else t = '공유 서버 연결됨';
+            el.textContent = t;
+            el.className = 'x-syncbadge ' + cls;
+            el.title = syncState.error ? syncState.error : '눌러서 지금 동기화';
+        }
+
+        // ----- 공유 서버 설정 창 -----
+        function openSyncSettings() {
+            closeDataMenu();
+            const c = syncCfg();
+            $('syUrl').value = c.url; $('syCode').value = c.code;
+            $('syStatus').textContent = syncOn() ? ('연결됨' + (syncState.lastAt ? ' · 마지막 동기화 ' + fmtDateTime(syncState.lastAt) : '')) : '연결되지 않음';
+            $('syStatus').className = 'x-desc ' + (syncOn() ? 'ok' : '');
+            $('syDisconnect').style.display = syncOn() ? '' : 'none';
+            openModal('syncModal');
+        }
+        async function syncTest() {
+            const url = $('syUrl').value.trim(), code = $('syCode').value.trim();
+            const el = $('syStatus');
+            if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) { el.textContent = "주소는 'https://script.google.com/macros/s/…/exec' 형태여야 합니다."; el.className = 'x-desc bad'; return false; }
+            el.textContent = '연결 확인 중…'; el.className = 'x-desc';
+            try {
+                const r = await syncApi({ action: 'ping', code: code }, url);
+                if (!r.ok || r.server !== 'tripbtoz-inventory') throw new Error('비품관리 서버가 아닙니다.');
+                if (!r.auth) { el.textContent = '서버에는 연결됐지만 팀 코드가 맞지 않습니다.'; el.className = 'x-desc bad'; return false; }
+                el.textContent = '연결 성공 · 팀 코드 확인됨'; el.className = 'x-desc ok';
+                return true;
+            } catch (e) {
+                el.textContent = '연결 실패: ' + (e.message || e) + ' — 웹 앱 배포의 액세스 권한이 ‘모든 사용자’인지 확인하세요.';
+                el.className = 'x-desc bad';
+                return false;
+            }
+        }
+        async function syncSave() {
+            if (!(await syncTest())) return;
+            const prev = syncCfg();
+            const url = $('syUrl').value.trim(), code = $('syCode').value.trim();
+            if (prev.url !== url) syncState.version = 0;
+            syncState.lastPushed = '';
+            syncSaveCfg({ url: url, code: code, version: 0 });
+            closeModal('syncModal');
+            toast('공유 서버에 연결했습니다. 데이터를 합치는 중…');
+            await syncNow(false);
+        }
+        function syncDisconnect() {
+            if (!confirm('이 기기에서 공유 서버 연결을 끊을까요?\n\n이 기기의 데이터는 그대로 남고, 서버 데이터도 지워지지 않습니다.')) return;
+            syncSaveCfg({ url: '', code: '' });   // 기본 서버 주소(SYNC_DEFAULT_URL)가 있으면 QR 조회에는 계속 사용
+            syncState = { busy: false, pending: false, lastAt: 0, version: 0, lastPushed: '', error: '' };
+            closeModal('syncModal');
+            renderSyncBadge();
+            toast('연결을 끊었습니다.');
+        }
+
+        // 다른 창에서 돌아오면 최신본 받아오기
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && syncOn() && currentUser && Date.now() - syncState.lastAt > 30000) syncNow(true);
+        });
+
+        // ----- QR 주소 -----
+        // QR 내용 = 사이트 주소 + #a=시스템ID → 휴대폰 기본 카메라로 찍어도 사이트가 열림
+        function siteBase() {
+            if (/^https?:$/.test(location.protocol)) return location.origin + location.pathname;
+            return SITE_URL;
+        }
+        function qrPayload(id) { return siteBase() + '#a=' + encodeURIComponent(id); }
+        function codeFromText(text) {
+            const s = String(text || '').trim();
+            const m = /[#?&]a=([^&#]+)/.exec(s);
+            if (m) { try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; } }
+            return s;
+        }
+
+        // ----- QR로 열렸을 때 (주소 끝 #a=ID) -----
+        let qrPendingId = '';
+        function readQrHash() {
+            const m = /(?:^#|&)a=([^&]+)/.exec(location.hash || '');
+            if (!m) return '';
+            try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
+        }
+        function clearQrHash() {
+            try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) {}
+        }
+        async function handleQrOpen() {
+            const id = qrPendingId || readQrHash();
+            if (!id) return;
+            qrPendingId = '';
+            clearQrHash();
+            if (currentUser) {
+                if (!assets.some(a => a.id === id) && syncOn()) await syncNow(true);
+                if (assets.some(a => a.id === id)) { showDetail(id); return; }
+            }
+            showQrLookup(id);
+        }
+        window.addEventListener('hashchange', () => { if (readQrHash()) handleQrOpen(); });
+
+        // 이 기기에 데이터가 없을 때: 서버에서 기본 정보 조회
+        async function showQrLookup(id) {
+            const body = $('qrInfoBody');
+            body.innerHTML = '<p class="x-desc">비품 정보를 불러오는 중…</p>';
+            openModal('qrInfoModal');
+            const c = syncCfg();
+            if (!c.url) {
+                body.innerHTML = '<p class="x-desc">이 기기에는 비품 정보가 없고, 공유 서버도 설정되지 않아 조회할 수 없습니다.</p><p class="x-desc">관리번호 확인용 코드: <b>' + esc(id) + '</b></p>';
+                return;
+            }
+            try {
+                const r = await syncApi({ action: 'lookup', id: id, code: c.code });
+                if (!r.ok) throw new Error(r.error || '조회 실패');
+                if (!r.found) { body.innerHTML = '<p class="x-empty">등록된 비품을 찾을 수 없습니다.<br>삭제되었거나 다른 회사의 라벨일 수 있습니다.</p>'; return; }
+                const a = r.item;
+                const F = [];
+                const add = (label, v) => { if (v !== undefined && v !== null && v !== '') F.push('<div><p class="x-flabel">' + label + '</p><p class="x-fval">' + esc(v) + '</p></div>'); };
+                add('관리번호', a.assetNo); add('분류', a.category); add('모델명', a.model); add('상태', a.status); add('위치', a.location);
+                if (r.full) { add('시리얼', a.serial); add('사용자', a.user); add('정 담당자', a.manager); add('취득일', a.date); }
+                add('마지막 재물조사', a.lastAuditAt ? fmtDateTime(a.lastAuditAt) : '');
+                body.innerHTML = '<h4 class="x-qrname">' + esc(a.name || '(이름 없음)') + '</h4>' +
+                    '<div class="x-fields" style="margin-bottom:14px">' + F.join('') + '</div>' +
+                    '<p class="x-desc">공유 서버 기준 정보 · ' + esc(fmtDateTime(r.savedAt)) + ' 저장본' + (r.full ? '' : '<br>로그인하고 공유 서버에 연결된 기기에서는 전체 정보를 볼 수 있습니다.') + '</p>';
+            } catch (e) {
+                body.innerHTML = '<p class="x-desc bad">비품 정보를 불러오지 못했습니다. 인터넷 연결을 확인해주세요.<br><small>' + esc(e.message || e) + '</small></p>';
+            }
+        }
+
         // 백업 파일 불러오기 = 병합. 같은 비품은 '더 최근에 수정한 쪽'을 남김.
         function importData(event) {
             closeDataMenu();
@@ -4095,7 +4374,7 @@
             const leftover = (hpx - 2 * pad) - coH - nameH - codeH - snH - Math.max(0, blocks - 1) * 1.5;
             const detLn = det.length ? lpClamp(Math.floor(leftover / (fDet * 1.32)), 1, 5) : 0;
 
-            const url = lpQrDataURL(String(a.id), Math.max(360, qr * 4));
+            const url = lpQrDataURL(qrPayload(a.id), Math.max(360, qr * 4));   // QR = 사이트 주소 + #a=ID
             const lc = n => 'display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:' + n + ';overflow:hidden;word-break:break-word;overflow-wrap:anywhere;';
             let h = '<div style="flex-shrink:0;background:#fff;padding:' + qz + 'px;margin-right:' + gap + 'px;line-height:0">' +
                 '<img src="' + url + '" alt="QR" style="width:' + qr + 'px;height:' + qr + 'px;display:block;image-rendering:pixelated"/></div>';
