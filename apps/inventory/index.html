@@ -56,11 +56,17 @@
         .x-hist em button{border:0;background:none;padding:0;font-size:11px;font-weight:700;color:#6366f1;cursor:pointer;font-family:inherit}
         .x-hist em button:last-child{color:#ef4444}
         /* ----- QR 카메라 확대 ----- */
-        .x-zoom{display:flex;align-items:center;gap:10px;margin-top:12px}
-        .x-zoom input{flex:1;accent-color:#4f46e5}
-        .x-zoom button{width:38px;height:38px;border-radius:12px;border:1px solid #e2e8f0;background:#fff;font-size:20px;font-weight:700;color:#334155;cursor:pointer;flex-shrink:0}
-        .x-zoom span{font-size:12px;font-weight:700;color:#4f46e5;min-width:38px;text-align:right}
         .x-zoomnote{font-size:12px;color:#94a3b8;text-align:center;margin:10px 0 0}
+        /* 스캐너 창이 휴대폰 화면 밖으로 넘치지 않게: 창 안에서 스크롤, 닫기 버튼은 위에 고정 */
+        #scannerModal{padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom))}
+        #scannerContent{max-height:calc(100vh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;overscroll-behavior:contain}
+        @media (max-width:640px){#scannerContent{padding:16px !important;border-radius:20px !important}}
+        .x-scanhead{position:sticky;top:0;z-index:3;background:#fff}
+        @media (max-width:640px){.x-scanhead{margin-bottom:12px !important;padding-bottom:10px !important}}
+        /* 카메라 화면: 두 손가락으로 확대 */
+        .x-scanwrap{position:relative;touch-action:none;-webkit-user-select:none;user-select:none}
+        .x-zoombadge{position:absolute;right:10px;top:10px;z-index:4;background:rgba(15,23,42,.62);color:#fff;font-size:12px;font-weight:800;border-radius:999px;padding:4px 10px;pointer-events:none;display:none}
+        .x-zoombadge.on{display:block}
         /* ----- 슬라이드 메뉴 ----- */
         #catMenuBtn,#mgrMenuBtn,#pwMenuBtn{display:none !important}
         .x-burger{display:flex;align-items:center;justify-content:center;width:40px;height:40px;margin-left:-8px;border:0;background:none;border-radius:12px;color:#334155;cursor:pointer}
@@ -688,16 +694,13 @@
 
     <div id="scannerModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-300">
         <div class="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl transform scale-95 transition-transform duration-300" id="scannerContent">
-            <div class="flex justify-between items-center mb-5 border-b border-slate-100 pb-4">
+            <div class="x-scanhead flex justify-between items-center mb-5 border-b border-slate-100 pb-4">
                 <h3 class="font-bold text-slate-900 text-lg flex items-center gap-2"><i data-lucide="scan" class="text-indigo-600"></i> 스마트 QR 스캐너</h3>
                 <button onclick="closeScanner()" class="p-2 bg-slate-50 text-slate-500 hover:text-slate-800 rounded-full"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            <div id="reader" class="overflow-hidden rounded-2xl border-2 border-slate-100 bg-slate-50"></div>
-            <div id="scanZoom" class="x-zoom" style="display:none">
-                <button type="button" onclick="scanZoomStep(-1)" aria-label="축소">−</button>
-                <input type="range" id="scanZoomRange" oninput="scanZoomSet(this.value)" aria-label="카메라 확대">
-                <button type="button" onclick="scanZoomStep(1)" aria-label="확대">＋</button>
-                <span id="scanZoomVal">1.0×</span>
+            <div id="scanWrap" class="x-scanwrap">
+                <div id="reader" class="overflow-hidden rounded-2xl border-2 border-slate-100 bg-slate-50"></div>
+                <span id="scanZoomVal" class="x-zoombadge">1.0×</span>
             </div>
             <p id="scanZoomNote" class="x-zoomnote" style="display:none"></p>
             <p id="scanStatus" class="x-scan-status" aria-live="polite"></p>
@@ -727,7 +730,20 @@
         .lp-in{width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:13px;background:#fff;color:#0f172a;outline:none;font-family:inherit}
         .lp-in:focus{border-color:#6366f1}
         .lp-mini{border:1px solid #e2e8f0;background:#fff;color:#475569;font-size:11px;font-weight:700;border-radius:8px;padding:4px 9px;cursor:pointer;font-family:inherit}
-        .lp-items{max-height:170px;overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px}
+        .lp-items{max-height:280px;overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px}
+        @media (max-width:820px){.lp-items{max-height:46vh}}
+        .lp-filt{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+        .lp-filt .lp-search{grid-column:1 / -1}
+        .lp-acts{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:8px}
+        .lp-acts .lp-chk{font-size:11.5px}
+        .lp-mini.lp-hl{border-color:#c7d2fe;background:#eef2ff;color:#4338ca}
+        .lp-cnt{font-size:12px;font-weight:800;color:#4f46e5}
+        .lp-item .lp-it{display:flex;flex-direction:column;min-width:0;flex:1}
+        .lp-item .lp-it b{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .lp-item .lp-it em{font-style:normal;font-size:11px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .lp-item.on{background:#f5f7ff}
+        .lp-item .lp-tag{font-size:10px;font-weight:800;color:#be123c;background:#fff1f2;border-radius:6px;padding:1px 5px;flex-shrink:0}
+        .lp-empty{padding:18px 10px;text-align:center;font-size:12px;color:#94a3b8}
         .lp-item{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:12.5px;color:#1e293b;border-bottom:1px solid #f1f5f9;cursor:pointer}
         .lp-item:last-child{border-bottom:0}
         .lp-item span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -763,8 +779,22 @@
             <div class="lp-body">
                 <div class="lp-col">
                     <div class="lp-sec">
-                        <div class="lp-t"><span>인쇄할 비품</span>
-                            <span><button class="lp-mini" onclick="lpCheckAll(true)">전체 선택</button> <button class="lp-mini" onclick="lpCheckAll(false)">해제</button></span>
+                        <div class="lp-t"><span>인쇄할 비품 고르기</span>
+                            <span><span class="lp-cnt" id="lpSelCount">0개 선택</span> <button class="lp-mini" onclick="lpClearAll()">선택 초기화</button></span>
+                        </div>
+                        <div class="lp-filt">
+                            <input id="lpSearch" class="lp-in lp-search" type="search" placeholder="비품명·관리번호·위치·사용자·시리얼 검색" oninput="lpRenderItems()">
+                            <select id="lpLoc" class="lp-in" onchange="lpRenderItems()" aria-label="위치"></select>
+                            <select id="lpCat" class="lp-in" onchange="lpRenderItems()" aria-label="분류"></select>
+                        </div>
+                        <div class="lp-acts">
+                            <button class="lp-mini" onclick="lpCheckAll(true)">보이는 항목 모두 선택</button>
+                            <button class="lp-mini" onclick="lpCheckAll(false)">보이는 항목 해제</button>
+                            <button class="lp-mini lp-hl" id="lpListBtn" onclick="lpCheckListView()" style="display:none"></button>
+                        </div>
+                        <div class="lp-acts" style="gap:14px">
+                            <label class="lp-chk"><input id="lpOnlySel" type="checkbox" onchange="lpRenderItems()"> 선택한 것만 보기</label>
+                            <label class="lp-chk"><input id="lpShowDisposed" type="checkbox" onchange="lpRenderItems()"> 폐기 완료 포함</label>
                         </div>
                         <div class="lp-items" id="lpItems"></div>
                     </div>
@@ -1465,7 +1495,9 @@
         let currentUser = null;
         let assets = [];
         let trash = [];             // 휴지통 (삭제한 비품, 복구 가능)
-        let managers = ['홍길동'];
+        // 로그인 화면에 보이는 사람 (총무 담당자 3명)
+        const LOGIN_USERS = ['조태연', '김별', '김준식'];
+        let managers = LOGIN_USERS.slice();
         let categories = SEED_CATEGORIES.slice();
         let settings = Object.assign({}, DEFAULT_SETTINGS);
         let audits = [];            // 재물조사 기록
@@ -1602,6 +1634,7 @@
             trash = (Array.isArray(trash) ? trash : []).filter(t => t && t.id);
             trash.forEach(t => { t.id = String(t.id).replace(/[^\w\-.:]/g, '_'); });
             if (!Array.isArray(managers)) managers = [];
+            LOGIN_USERS.forEach(n => { if (!managers.includes(n)) managers.push(n); });
             if (!Array.isArray(categories) || !categories.length) categories = SEED_CATEGORIES.slice();
             if (!Array.isArray(audits)) audits = [];
             if (!Array.isArray(supplies)) supplies = [];
@@ -1619,7 +1652,7 @@
                     if (v[0] === undefined || (!v[6] && !(v[0] || []).length && lsHasData)) {
                         // 처음 실행: 이전 버전(localStorage) 데이터를 그대로 옮겨옴 (원본은 지우지 않음)
                         assets = lsAssets || [];
-                        managers = lsGet(MGR_KEY) || ['홍길동'];
+                        managers = lsGet(MGR_KEY) || LOGIN_USERS.slice();
                         categories = lsGet(CAT_KEY) || SEED_CATEGORIES.slice();
                         normalizeAll();
                         saveToDB();
@@ -1629,7 +1662,7 @@
                         if (assets.length) setTimeout(() => toast('이전 버전 데이터 ' + assets.length + '건을 새 저장소로 옮겼습니다.'), 600);
                     } else {
                         assets = v[0] || []; trash = v[1] || [];
-                        managers = v[2] || ['홍길동']; categories = v[3] || SEED_CATEGORIES.slice();
+                        managers = v[2] || LOGIN_USERS.slice(); categories = v[3] || SEED_CATEGORIES.slice();
                         settings = v[4] || {}; audits = v[5] || []; supplies = v[7] || [];
                         normalizeAll();
                         const photos = await idbAllPhotos();
@@ -1641,7 +1674,7 @@
             }
             assets = lsGet(DB_KEY) || [];
             trash = lsGet('tbz_trash') || [];
-            managers = lsGet(MGR_KEY) || ['홍길동'];
+            managers = lsGet(MGR_KEY) || LOGIN_USERS.slice();
             categories = lsGet(CAT_KEY) || SEED_CATEGORIES.slice();
             settings = lsGet('tbz_settings') || {};
             audits = lsGet('tbz_audits') || [];
@@ -1747,8 +1780,8 @@
         function fillLoginManagers() {
             const sel = document.getElementById('loginManager');
             if (!sel) return;
-            sel.innerHTML = '<option value="">본인 이름(담당자) 선택</option>';
-            managers.forEach(m => {
+            sel.innerHTML = '<option value="">본인 이름 선택</option>';
+            LOGIN_USERS.forEach(m => {
                 const o = document.createElement('option');
                 o.value = m; o.textContent = m;
                 sel.appendChild(o);
@@ -1756,8 +1789,7 @@
             // 지난번 로그인한 이름을 미리 선택
             let last = '';
             try { last = localStorage.getItem('tbz_last_mgr') || ''; } catch (e) {}
-            if (last && managers.includes(last)) sel.value = last;
-            else if (managers.length === 1) sel.value = managers[0];
+            if (last && LOGIN_USERS.includes(last)) sel.value = last;
         }
 
         // 앱 초기화
@@ -1793,7 +1825,7 @@
             if (uid === 'admin') {
                 if (!checkPw('admin', pw)) return alert("비밀번호가 올바르지 않습니다.");
                 // 명단이 비어 있으면 이름 선택 없이도 로그인 허용(닭-달걀 방지)
-                if (managers.length > 0 && !mgr) return alert("본인 이름(담당자)을 선택해주세요.");
+                if (!mgr) return alert("본인 이름을 선택해주세요.");
                 currentUser = { id: 'admin', name: mgr || '관리자', role: 'admin' };
             }
             try { localStorage.setItem('tbz_last_mgr', currentUser.name); } catch (err) {}   // 다음 로그인 때 이름 자동 선택
@@ -2304,38 +2336,101 @@
             el.innerHTML = h;
         }
 
-        // ----- QR 스캔 카메라 확대 (기기가 지원할 때) -----
-        let scanZoomCap = null;
+        // ----- QR 스캔 카메라 확대: 기본 카메라처럼 두 손가락으로 벌리기/오므리기 (기기가 지원할 때) -----
+        let scanZoomCap = null, scanZoomCur = 1, scanZoomBusy = false, scanZoomWant = null, scanBadgeTimer = 0;
         function setupScanZoom() {
             const sc = html5QrcodeScanner;
             scanZoomCap = null;
             let caps = {}, cur = {};
             try { caps = sc.getRunningTrackCapabilities() || {}; } catch (e) {}
             try { cur = sc.getRunningTrackSettings() || {}; } catch (e) {}
+            const note = $('scanZoomNote');
             if (caps.zoom && caps.zoom.max > caps.zoom.min) {
-                scanZoomCap = { min: caps.zoom.min, max: Math.min(caps.zoom.max, 10), step: caps.zoom.step || 0.1 };
-                const r = $('scanZoomRange');
-                r.min = scanZoomCap.min; r.max = scanZoomCap.max; r.step = scanZoomCap.step;
-                r.value = cur.zoom || scanZoomCap.min;
-                $('scanZoomVal').textContent = Number(r.value).toFixed(1) + '×';
-                $('scanZoom').style.display = '';
+                scanZoomCap = { min: caps.zoom.min, max: Math.min(caps.zoom.max, 10) };
+                scanZoomCur = cur.zoom || scanZoomCap.min;
+                note.textContent = '두 손가락으로 화면을 벌리면 확대, 오므리면 축소됩니다.';
             } else {
-                $('scanZoomNote').textContent = '이 기기·브라우저는 카메라 확대를 지원하지 않습니다. QR에 휴대폰을 조금 더 가까이 대주세요.';
-                $('scanZoomNote').style.display = '';
+                note.textContent = '이 기기·브라우저는 카메라 확대를 지원하지 않습니다. QR에 휴대폰을 조금 더 가까이 대주세요.';
             }
+            note.style.display = '';
         }
+        function scanZoomShowBadge() {
+            const b = $('scanZoomVal');
+            b.textContent = scanZoomCur.toFixed(1) + '×';
+            b.classList.add('on');
+            clearTimeout(scanBadgeTimer);
+            scanBadgeTimer = setTimeout(() => b.classList.remove('on'), 1200);
+        }
+        // 손가락 움직임마다 바로 카메라에 적용하면 버벅이므로, 앞의 적용이 끝나면 마지막 값만 적용
         function scanZoomSet(v) {
             if (!html5QrcodeScanner || !scanZoomCap) return;
-            const z = Math.max(scanZoomCap.min, Math.min(scanZoomCap.max, Number(v)));
-            $('scanZoomRange').value = z;
-            $('scanZoomVal').textContent = z.toFixed(1) + '×';
-            try { html5QrcodeScanner.applyVideoConstraints({ advanced: [{ zoom: z }] }).catch(() => {}); } catch (e) {}
+            scanZoomCur = Math.max(scanZoomCap.min, Math.min(scanZoomCap.max, Number(v)));
+            scanZoomShowBadge();
+            scanZoomWant = scanZoomCur;
+            if (scanZoomBusy) return;
+            const run = () => {
+                if (scanZoomWant === null || !html5QrcodeScanner) { scanZoomBusy = false; return; }
+                const z = scanZoomWant; scanZoomWant = null; scanZoomBusy = true;
+                let p;
+                try { p = html5QrcodeScanner.applyVideoConstraints({ advanced: [{ zoom: z }] }); } catch (e) { p = null; }
+                Promise.resolve(p).catch(() => {}).then(run);
+            };
+            run();
         }
-        function scanZoomStep(dir) {
-            if (!scanZoomCap) return;
-            const unit = Math.max(scanZoomCap.step, (scanZoomCap.max - scanZoomCap.min) / 8);
-            scanZoomSet(Number($('scanZoomRange').value) + dir * unit);
+        (function setupScanPinch() {
+            const wrap = document.getElementById('scanWrap');
+            if (!wrap) return;
+            let startDist = 0, startZoom = 1;
+            const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+            wrap.addEventListener('touchstart', e => {
+                if (e.touches.length === 2) { startDist = dist(e.touches); startZoom = scanZoomCur; e.preventDefault(); }
+            }, { passive: false });
+            wrap.addEventListener('touchmove', e => {
+                if (e.touches.length !== 2 || !startDist) return;
+                e.preventDefault();   // 화면 전체가 확대되지 않게
+                if (!scanZoomCap) return;
+                scanZoomSet(startZoom * dist(e.touches) / startDist);
+            }, { passive: false });
+            const end = e => { if (e.touches.length < 2) startDist = 0; };
+            wrap.addEventListener('touchend', end);
+            wrap.addEventListener('touchcancel', end);
+            // PC: 마우스 휠로 확대·축소
+            wrap.addEventListener('wheel', e => {
+                if (!scanZoomCap) return;
+                e.preventDefault();
+                scanZoomSet(scanZoomCur * (e.deltaY < 0 ? 1.12 : 1 / 1.12));
+            }, { passive: false });
+        })();
+
+        // ----- 카메라 화면이 휴대폰 화면보다 커지지 않게: 세로로 긴 영상은 가운데만 보이게 자르기 -----
+        // (인식 영역은 영상 가운데라 그대로이고, 보이는 부분만 줄어듦)
+        function fitScanView() {
+            const reader = document.getElementById('reader');
+            const video = reader && reader.querySelector('video');
+            const kids = reader ? [...reader.children] : [];
+            if (!video) { if (reader) reader.style.height = ''; return; }
+            kids.forEach(k => { k.style.transform = ''; });
+            reader.style.height = '';
+            const vh = video.getBoundingClientRect().height;
+            const cap = Math.round(Math.max(260, Math.min(window.innerHeight * 0.5, 460)));
+            if (vh > cap + 4) {
+                const off = (vh - cap) / 2;
+                reader.style.height = cap + 'px';
+                kids.forEach(k => { k.style.transform = 'translateY(' + (-off) + 'px)'; });
+            }
         }
+        (function watchScanView() {
+            const reader = document.getElementById('reader');
+            if (!reader) return;
+            let t = 0;
+            const later = () => { clearTimeout(t); t = setTimeout(fitScanView, 30); };
+            new MutationObserver(() => {
+                later();
+                const v = reader.querySelector('video');
+                if (v && !v._fitBound) { v._fitBound = true; v.addEventListener('loadedmetadata', later); v.addEventListener('resize', later); }
+            }).observe(reader, { childList: true });
+            window.addEventListener('resize', later);
+        })();
 
         // 아이폰: 두 손가락 확대 막기 (화면 크기 고정)
         document.addEventListener('gesturestart', e => e.preventDefault());
@@ -2775,7 +2870,7 @@
             if (isList) {
                 const head = document.createElement('div');
                 head.className = 'x-lrow x-lhead';
-                head.innerHTML = '<span>사진</span><span>비품명 / 관리번호</span><span>상태</span><span>사용자 · 담당</span><span>위치</span>';
+                head.innerHTML = '<span>사진</span><span>비품명 / 시리얼 · 자산코드</span><span>상태</span><span>사용자 · 담당</span><span>위치</span>';
                 grid.appendChild(head);
             }
             const isAdmin = currentUser && currentUser.role === 'admin';
@@ -2801,7 +2896,7 @@
                         : `<div class="w-12 h-12 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-300"><i data-lucide="image" class="w-5 h-5"></i></div>`;
                     card.innerHTML = `
                         <div>${thumb}</div>
-                        <div class="x-lmain"><p class="x-lname">${esc(item.name)}</p><p class="x-lsub">${code}${item.serial ? ' · S/N ' + esc(item.serial) : ''}</p></div>
+                        <div class="x-lmain"><p class="x-lname">${esc(item.name)}</p><p class="x-lsub">${'S/N ' + esc(item.serial || '-') + ' · 자산코드 ' + esc(item.assetNo || '-')}</p></div>
                         <div><span class="text-[10px] font-bold px-2.5 py-1 rounded-lg whitespace-nowrap ${badgeColor}">${esc(item.status)}</span> ${flag}</div>
                         <div class="x-lcell">${esc(who)}</div>
                         <div class="x-lcell">${esc(item.location)}</div>
@@ -3540,7 +3635,7 @@
             }
             // 버튼 없이 카메라를 바로 켜는 방식 (후면 카메라 우선)
             html5QrcodeScanner = new Html5Qrcode("reader");
-            $('scanZoom').style.display = 'none'; $('scanZoomNote').style.display = 'none';
+            $('scanZoomNote').style.display = 'none'; scanZoomCap = null; scanZoomCur = 1;
             html5QrcodeScanner.start(
                 { facingMode: "environment" },
                 {
@@ -3550,7 +3645,7 @@
                 },
                 onScanCode,
                 (error) => { /* 인식 대기 중 에러 무시 */ }
-            ).then(() => setupScanZoom()).catch((err) => {
+            ).then(() => { setupScanZoom(); fitScanView(); }).catch((err) => {
                 html5QrcodeScanner = null;
                 $('scanStatus').textContent = '카메라를 켤 수 없습니다. 카메라 권한을 확인하거나, 아래에 관리번호를 직접 입력해주세요.';
                 $('scanStatus').className = 'x-scan-status bad';
@@ -3566,7 +3661,8 @@
                 // 카메라를 멈춘 뒤 정리
                 try { sc.stop().then(() => sc.clear()).catch(() => {}); } catch (e) {}
             }
-            $('scanZoom').style.display = 'none'; $('scanZoomNote').style.display = 'none';
+            $('scanZoomNote').style.display = 'none'; scanZoomCap = null;
+            const rd = document.getElementById('reader'); if (rd) rd.style.height = '';
             modal.classList.add('opacity-0'); content.classList.add('scale-95');
             setTimeout(() => modal.classList.add('hidden'), 300);
             if (scanMode === 'audit') renderAudit();
@@ -5428,14 +5524,19 @@
         // ── 창 열기/닫기 ──
         // mode: 'detail' = 상세 화면의 비품 1개 / 'list' = 현재 목록(검색·필터 결과)
         function openLabelPrint(mode) {
+            // 선택 목록에는 항상 전체 비품을 띄우고, 그 안에서 검색·필터로 골라 체크한다.
+            if (!assets.length) { alert('등록된 비품이 없습니다.'); return; }
+            lp.items = assets.slice().sort((a, b) =>
+                String(a.assetNo || '~').localeCompare(String(b.assetNo || '~'), 'ko', { numeric: true }) ||
+                String(a.name || '').localeCompare(String(b.name || ''), 'ko')).map(a => a.id);
             if (mode === 'detail') {
                 if (!currentDetailId) return;
-                lp.items = [currentDetailId];
+                lp.checked = new Set([currentDetailId]);   // 보던 비품 1개를 체크해 두고, 다른 비품도 더 고를 수 있음
             } else {
-                lp.items = lpFilteredIds.filter(id => assets.some(a => a.id === id));
-                if (!lp.items.length) { alert('인쇄할 비품이 없습니다. 검색·필터 조건을 확인해주세요.'); return; }
+                lp.checked = new Set();                      // 메뉴에서 열면 아무것도 고르지 않은 상태로 시작
             }
-            lp.checked = new Set(lp.items);
+            lpOpenMode = mode;
+            lpResetItemFilters();
             lp.cellStart = 1; lp.page = 0;
 
             // 규격 목록
@@ -5476,22 +5577,81 @@
             if (document.getElementById('labelPrintModal').classList.contains('lp-open')) lpRenderPreview();
         });
 
+        let lpOpenMode = 'list';
+        // 선택 창의 검색·필터 초기화 (위치·분류 목록도 현재 데이터로 다시 채움)
+        function lpResetItemFilters() {
+            const uniq = key => [...new Set(assets.map(a => a[key]).filter(Boolean))].sort((x, y) => String(x).localeCompare(String(y), 'ko'));
+            const opts = (all, list) => '<option value="">' + all + '</option>' + list.map(v => '<option value="' + lpEsc(v) + '">' + lpEsc(v) + '</option>').join('');
+            document.getElementById('lpLoc').innerHTML = opts('전체 위치', uniq('location'));
+            document.getElementById('lpCat').innerHTML = opts('전체 분류', uniq('category'));
+            document.getElementById('lpSearch').value = '';
+            document.getElementById('lpOnlySel').checked = false;
+            document.getElementById('lpShowDisposed').checked = false;
+            // 목록 화면에서 검색·필터를 걸어 둔 상태라면 그 결과를 한 번에 고를 수 있는 버튼 표시
+            const btn = document.getElementById('lpListBtn');
+            const listIds = lpFilteredIds.filter(id => assets.some(a => a.id === id));
+            if (lpOpenMode === 'list' && listIds.length && listIds.length < assets.length) {
+                btn.textContent = '목록 화면의 ' + listIds.length + '개 선택';
+                btn.style.display = '';
+            } else btn.style.display = 'none';
+        }
+        // 현재 검색·필터에 보이는 비품 id 목록
+        function lpVisibleIds() {
+            const kw = document.getElementById('lpSearch').value.trim().toLowerCase();
+            const loc = document.getElementById('lpLoc').value;
+            const cat = document.getElementById('lpCat').value;
+            const onlySel = document.getElementById('lpOnlySel').checked;
+            const showDisp = document.getElementById('lpShowDisposed').checked;
+            return lp.items.filter(id => {
+                const a = assets.find(x => x.id === id);
+                if (!a) return false;
+                if (onlySel && !lp.checked.has(id)) return false;
+                // 폐기 완료는 기본적으로 숨김 (이미 체크된 건 보이게)
+                if (!showDisp && isDisposed(a) && !lp.checked.has(id)) return false;
+                if (loc && a.location !== loc) return false;
+                if (cat && a.category !== cat) return false;
+                if (kw && ![a.name, a.assetNo, a.location, a.user, a.serial, a.model, a.maker, a.manager, a.managerSub]
+                    .some(v => v && String(v).toLowerCase().includes(kw))) return false;
+                return true;
+            });
+        }
         function lpRenderItems() {
             const box = document.getElementById('lpItems');
-            box.innerHTML = lp.items.map((id, i) => {
+            const ids = lpVisibleIds();
+            box.innerHTML = ids.length ? ids.map(id => {
                 const a = assets.find(x => x.id === id);
-                if (!a) return '';
-                return '<label class="lp-item"><input type="checkbox" data-lp-idx="' + i + '"' + (lp.checked.has(id) ? ' checked' : '') +
-                    ' onchange="lpToggle(this)"><span>' + lpEsc(a.name) + '</span><small>' + lpEsc(a.assetNo || a.location || '') + '</small></label>';
-            }).join('');
+                const i = lp.items.indexOf(id);
+                const on = lp.checked.has(id);
+                const sub = [a.assetNo, a.location, a.user].filter(Boolean).join(' · ');
+                return '<label class="lp-item' + (on ? ' on' : '') + '"><input type="checkbox" data-lp-idx="' + i + '"' + (on ? ' checked' : '') +
+                    ' onchange="lpToggle(this)"><span class="lp-it"><b>' + lpEsc(a.name) + '</b>' + (sub ? '<em>' + lpEsc(sub) + '</em>' : '') + '</span>' +
+                    (isDisposed(a) ? '<span class="lp-tag">폐기</span>' : '') + '</label>';
+            }).join('') : '<div class="lp-empty">조건에 맞는 비품이 없습니다.</div>';
+            lpUpdateSelCount();
+        }
+        function lpUpdateSelCount() {
+            document.getElementById('lpSelCount').textContent = lp.checked.size + '개 선택';
         }
         function lpToggle(el) {
             const id = lp.items[+el.dataset.lpIdx];
             if (el.checked) lp.checked.add(id); else lp.checked.delete(id);
+            el.closest('.lp-item').classList.toggle('on', el.checked);
+            lpUpdateSelCount();
+            if (!el.checked && document.getElementById('lpOnlySel').checked) lpRenderItems();
             lpRefresh();
         }
+        // 지금 보이는(검색·필터된) 비품만 선택/해제
         function lpCheckAll(on) {
-            lp.checked = new Set(on ? lp.items : []);
+            lpVisibleIds().forEach(id => on ? lp.checked.add(id) : lp.checked.delete(id));
+            lpRenderItems(); lpRefresh();
+        }
+        function lpClearAll() {
+            if (!lp.checked.size) return;
+            lp.checked = new Set();
+            lpRenderItems(); lpRefresh();
+        }
+        function lpCheckListView() {
+            lpFilteredIds.forEach(id => { if (lp.items.includes(id)) lp.checked.add(id); });
             lpRenderItems(); lpRefresh();
         }
 
@@ -5543,10 +5703,10 @@
                 info.innerHTML = '<b>' + lpEsc(s.brand + ' ' + s.code) + '</b> · ' + s.cols + '열 × ' + s.rows + '행 = ' + g.perPage + '칸 · 칸 ' + s.w + '×' + s.h + 'mm · 여백 좌우 ' +
                     g.mLeft.toFixed(1) + 'mm / 상하 ' + g.mTop.toFixed(1) + 'mm' + (fits ? '' : '<br><b style="color:#b91c1c">칸이 A4 용지를 벗어납니다. 규격 값을 확인해주세요.</b>');
                 const pages = lpPageCount(s, n);
-                document.getElementById('lpSummary').textContent = '선택 ' + n + '개 / ' + lp.items.length + '개 · A4 ' + pages + '장';
+                document.getElementById('lpSummary').textContent = '선택 ' + n + '개 · A4 ' + pages + '장';
             } else {
                 info.innerHTML = '<b style="color:#b91c1c">규격 값을 확인해주세요.</b>';
-                document.getElementById('lpSummary').textContent = '선택 ' + n + '개 / ' + lp.items.length + '개';
+                document.getElementById('lpSummary').textContent = '선택 ' + n + '개';
             }
             document.getElementById('lpPrintBtn').disabled = !ok || n === 0;
             lpRenderPreview();
