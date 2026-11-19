@@ -2148,6 +2148,15 @@
         // ===== 뒤로가기 (상세/등록 화면 → 보던 목록 그대로) =====
         let navPushed = false;   // 상세/폼 진입 시 브라우저 기록을 하나 쌓았는지
         let listScrollY = 0;     // 목록에서 보던 스크롤 위치
+        // 뒤로가기 때 브라우저가 스크롤을 맨 위로 되돌리지 않게, 스크롤 위치는 프로그램이 직접 복원
+        try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
+        // 화면 높이가 다 그려진 뒤에 스크롤 (휴대폰은 한 박자 늦게 그려지는 경우가 있어 몇 번 확인)
+        function restoreScroll(y) {
+            if (!(y > 0)) return;
+            let n = 0;
+            const go = () => { window.scrollTo(0, y); if (Math.abs(window.scrollY - y) > 2 && ++n < 10) setTimeout(go, 50); };
+            requestAnimationFrame(() => requestAnimationFrame(go));
+        }
 
         // 오른쪽 위 버튼: 상세·등록·재물조사 화면에서는 '뒤로가기', 첫 화면(목록)에서는 '로그아웃'
         // ===== 뒤로가기 처리 =====
@@ -2244,7 +2253,7 @@
             document.getElementById('dashboardView').classList.remove('hidden');
             setNavBack(false);
             renderList();
-            requestAnimationFrame(() => window.scrollTo(0, listScrollY));
+            restoreScroll(listScrollY);
         }
 
         // ===== 화면 이동 기록: 뒤로가기는 '바로 전 화면'으로 =====
@@ -2256,6 +2265,7 @@
         function navPush(e) {
             if (navRestoring) return;
             const top = navTop();
+            if (top) top.y = window.scrollY;   // 지금 화면에서 보던 위치 기억 (뒤로 왔을 때 복원)
             if (top && top.t === e.t && (top.id || null) === (e.id || null) && (top.au || null) === (e.au || null)) return;   // 같은 화면 다시 그리기
             navStack.push(e);
         }
@@ -2276,6 +2286,7 @@
                     showAuditView();
                 }
             } finally { navRestoring = false; }
+            restoreScroll(top.y);
         }
         function goBack() {
             navStack.pop();
