@@ -177,7 +177,8 @@
         .x-flag.bad{background:#ffe4e6;color:#be123c}
         .x-flag.warn{background:#fef3c7;color:#92400e}
 
-        .x-filters{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+        .x-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+        @media (max-width:640px){.x-filters{grid-template-columns:1fr 1fr}.x-filters #makerBar{grid-column:1 / -1}}
         .x-sel{width:100%;padding:9px 12px;border:1px solid transparent;border-radius:12px;font-size:13px;background:#f8fafc;color:#334155;outline:none;font-family:inherit;cursor:pointer;min-width:0}
         .x-sel:focus{border-color:#6366f1;background:#fff}
 
@@ -425,6 +426,7 @@
                     <!-- 위치 / 담당자·사용자 필터 -->
                     <div class="x-filters">
                         <select id="locBar" class="x-sel" onchange="listFilterChanged()" aria-label="위치 필터"><option value="">전체 위치</option></select>
+                        <select id="makerBar" class="x-sel" onchange="listFilterChanged()" aria-label="제조사 필터"><option value="">전체 제조사</option></select>
                         <select id="personBar" class="x-sel" onchange="listFilterChanged()" aria-label="담당자·사용자 필터"><option value="">전체 담당자·사용자</option></select>
                     </div>
 
@@ -527,6 +529,7 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div><label class="block text-sm font-bold text-slate-700 mb-1.5">관리번호</label><input type="text" id="fAssetNo" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 outline-none transition" placeholder="비워두면 자동 부여 (예: TBZ-2026-001)"></div>
+                        <div><label class="block text-sm font-bold text-slate-700 mb-1.5">제조사</label><input type="text" id="fMaker" list="makerList" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 outline-none transition" placeholder="예: 삼성전자, LG전자, Apple"></div>
                         <div><label class="block text-sm font-bold text-slate-700 mb-1.5">모델명</label><input type="text" id="fModel" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 outline-none transition" placeholder="예: MacBook Pro 14"></div>
                         <div><label class="block text-sm font-bold text-slate-700 mb-1.5">사용자</label><input type="text" id="fUser" list="userList" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 outline-none transition" placeholder="개인 지급품이면 사용자 이름 (공용은 비움)"></div>
                         <div><label class="block text-sm font-bold text-slate-700 mb-1.5">반납 예정일</label><input type="date" id="fDue" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 outline-none transition"></div>
@@ -894,6 +897,7 @@
         </div>
     </div>
 
+    <datalist id="makerList"></datalist>
 
     <!-- ===== 슬라이드 메뉴 ===== -->
     <div id="drawerBg" class="x-drawer-bg" onclick="closeDrawer()"></div>
@@ -1587,6 +1591,10 @@
             a.location = a.location == null ? '' : String(a.location);
             if (!a.updatedAt) a.updatedAt = a.createdAt || 0;
             if (!Array.isArray(a.history)) a.history = [];
+            if (a.maker === undefined) {   // 예전 버전: 메모의 '제조사: ○○' 줄에서 가져옴
+                const mm = /(?:^|\n)제조사:\s*([^\n]+)/.exec(a.memo || '');
+                a.maker = mm ? mm[1].trim() : '';
+            }
             return a;
         }
         function normalizeAll() {
@@ -2574,6 +2582,11 @@
             const uniq = arr => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
             fill('locBar', '전체 위치', uniq(assets.map(a => a.location)));
             fill('personBar', '전체 담당자·사용자', uniq(assets.flatMap(a => [a.manager, a.managerSub, a.user])));
+            fill('makerBar', '전체 제조사', uniq(assets.map(a => a.maker)));
+            // 제조사 자동완성: 등록된 제조사 + 자주 쓰는 제조사
+            const mk = $('makerList');
+            if (mk) mk.innerHTML = uniq(assets.map(a => a.maker).concat(['삼성전자', 'LG전자', 'Apple', 'Dell', 'HP', 'Lenovo', 'ASUS', 'Microsoft', 'Logitech', 'BenQ', 'Xiaomi', '퍼시스', '시디즈']))
+                .map(v => '<option value="' + esc(v) + '">').join('');
             // 입력 자동완성(오타로 위치·이름이 갈라지는 것 방지)
             const dl = (id, values) => { const el = $(id); if (el) el.innerHTML = values.map(v => '<option value="' + esc(v) + '">').join(''); };
             dl('locList', uniq(assets.map(a => a.location)));
@@ -2581,7 +2594,7 @@
         }
         function resetFilters() {
             $('searchBar').value = ''; $('categoryBar').value = '';
-            $('locBar').value = ''; $('personBar').value = '';
+            $('locBar').value = ''; $('personBar').value = ''; if ($('makerBar')) $('makerBar').value = '';
             currentStatFilter = 'all';
             renderList();
         }
@@ -2648,16 +2661,18 @@
             const categoryFilter = $('categoryBar') ? $('categoryBar').value : '';
             const locFilter = $('locBar') ? $('locBar').value : '';
             const personFilter = $('personBar') ? $('personBar').value : '';
+            const makerFilter = $('makerBar') ? $('makerBar').value : '';
 
             const filtered = assets.filter(item => {
                 // 품명·관리번호·위치·시리얼·모델·사용자·담당자·구매처·증빙번호·메모에서 검색
                 const matchKeyword = !keyword ||
-                    [item.name, item.assetNo, item.id, item.location, item.serial, item.model, item.user,
+                    [item.name, item.assetNo, item.id, item.location, item.serial, item.maker, item.model, item.user,
                      item.manager, item.managerSub, item.vendor, item.docNo, item.memo]
                         .some(v => v && String(v).toLowerCase().includes(keyword));
                 if (!matchKeyword) return false;
                 if (categoryFilter && item.category !== categoryFilter) return false;
                 if (locFilter && item.location !== locFilter) return false;
+                if (makerFilter && (item.maker || '') !== makerFilter) return false;
                 if (personFilter && item.manager !== personFilter && item.managerSub !== personFilter && item.user !== personFilter) return false;
                 return matchStat(item, currentStatFilter);
             });
@@ -2688,7 +2703,7 @@
             if (listPage < 1) listPage = 1;
             const pageStart = (listPage - 1) * PAGE_SIZE;
             renderPager(filtered.length, pages);
-            updateSearchCount(filtered, !!(keyword || categoryFilter || locFilter || personFilter || currentStatFilter !== 'all'), !!keyword);
+            updateSearchCount(filtered, !!(keyword || categoryFilter || locFilter || personFilter || makerFilter || currentStatFilter !== 'all'), !!keyword);
 
             // 통계 (폐기 완료 자산은 '보유'에서 제외)
             const holding = assets.filter(a => !isDisposed(a));
@@ -2883,6 +2898,7 @@
                 fCat.value = item.category;
                 document.getElementById('fAssetNo').value = item.assetNo || '';
                 document.getElementById('fModel').value = item.model || '';
+                document.getElementById('fMaker').value = item.maker || '';
                 document.getElementById('fSerial').value = item.serial || '';
                 document.getElementById('fLocation').value = item.location;
                 document.getElementById('fUser').value = item.user || '';
@@ -2970,7 +2986,7 @@
 
         // 바뀐 항목을 이력 문장으로 정리
         const HISTORY_FIELDS = [
-            ['name', '비품명'], ['assetNo', '관리번호'], ['category', '분류'], ['model', '모델명'], ['serial', '시리얼'],
+            ['name', '비품명'], ['assetNo', '관리번호'], ['category', '분류'], ['maker', '제조사'], ['model', '모델명'], ['serial', '시리얼'],
             ['location', '위치'], ['user', '사용자'], ['dueDate', '반납 예정일'], ['status', '상태'],
             ['manager', '정 담당자'], ['managerSub', '부 담당자'], ['date', '취득일'], ['cost', '취득가액'],
             ['vendor', '구매처'], ['docNo', '결재·증빙 번호'], ['warranty', '보증 만료일'],
@@ -3038,6 +3054,7 @@
                 name: val('fName'),
                 category: val('fCategory'),
                 model: val('fModel'),
+                maker: val('fMaker'),
                 serial: val('fSerial'),
                 location: val('fLocation'),
                 user: user,
@@ -3132,7 +3149,8 @@
             // 기본 정보
             const F = [];
             const add = (label, value, cls) => F.push('<div><p class="x-flabel">' + label + '</p><p class="x-fval ' + (cls || '') + '">' + value + '</p></div>');
-            add('모델명 / 시리얼 번호', esc([item.model, item.serial].filter(Boolean).join(' / ') || '정보 없음'));
+            add('제조사 · 모델명', esc([item.maker, item.model].filter(Boolean).join(' · ') || '정보 없음'));
+            add('시리얼 번호', esc(item.serial || '정보 없음'));
             add('배치 및 사용 위치', esc(item.location || '-'));
             add('사용자', item.user ? esc(item.user) + (item.userSince ? ' <small>(' + esc(item.userSince) + ' 지급)</small>' : '') : '없음 <small>(공용·보관)</small>');
             if (item.user && item.dueDate) add('반납 예정일', esc(item.dueDate) + (isOverdue(item) ? ' <span class="x-flag bad">연체 ' + daysBetween(item.dueDate, todayStr()) + '일</span>' : ''));
@@ -3637,7 +3655,7 @@
         // 자산대장 열 정의 — 내보내기·일괄 등록 양식·가져오기가 모두 이 순서를 사용
         // [머리글, 항목, 너비, 종류]
         const REG_COLS = [
-            ['관리번호', 'assetNo', 16], ['비품명', 'name', 24], ['분류', 'category', 14], ['모델명', 'model', 16],
+            ['관리번호', 'assetNo', 16], ['비품명', 'name', 24], ['분류', 'category', 14], ['제조사', 'maker', 12], ['모델명', 'model', 16],
             ['시리얼번호', 'serial', 18], ['상태', 'status', 18], ['사용 위치', 'location', 16], ['사용자', 'user', 10],
             ['반납 예정일', 'dueDate', 12, 'date'], ['정 담당자', 'manager', 10], ['부 담당자', 'managerSub', 10],
             ['취득일', 'date', 12, 'date'], ['취득가액', 'cost', 12, 'num'], ['구매처', 'vendor', 14],
@@ -3678,7 +3696,7 @@
             const mfgM = /^(\d{4})-(\d{2})/.exec(mfg || '');
             const dept = (a.location === '미사용 보관' || (!a.location && isUnusedStatus(a))) ? '미사용' : (a.location || '');
             return {
-                dept: dept, user: a.user || '', cat: a.category || '', maker: a.maker || memoPart(memo, '제조사'),
+                dept: dept, user: a.user || '', cat: a.category || '', maker: a.maker !== undefined ? a.maker : memoPart(memo, '제조사'),
                 model: a.model || modelFromName(a), sn: a.serial || '', erp: a.assetNo || a.erpRaw || memoPart(memo, 'ERP 자산코드'),
                 date: ymd ? new Date(ymd.y, ymd.m - 1, ymd.d) : null,
                 cost: (a.cost === '' || a.cost == null) ? null : Number(a.cost),
@@ -3798,7 +3816,7 @@
             closeDataMenu();
             if (!xlsxReady()) return;
             const head = REG_COLS.filter(c => c[1] !== 'id').map(c => c[0]);
-            const sample = ['', '(예시) 노트북 맥북 프로 14', categories[0] ? categories[0].name : '', 'MacBook Pro 14 M3', 'C02XXXXXXX', '사용 중',
+            const sample = ['', '(예시) 노트북 맥북 프로 14', categories[0] ? categories[0].name : '', 'Apple', 'MacBook Pro 14 M3', 'C02XXXXXXX', '사용 중',
                 '본사 7층', managers[0] || '', '', managers[0] || '', '', '2026-03-02', 2390000, '애플코리아', '지출결의-2026-0312', '2027-03-01', 5, '정액법', 0, '예시 줄은 지우고 사용하세요'];
             const guide = [
                 ['항목', '작성 방법'],
@@ -3938,7 +3956,7 @@
                 }
 
                 // ERP 자산코드 → 관리번호 (NBK078 같은 코드만. '등록제외' 등 글자는 메모로)
-                let erp = /^[A-Za-z]{2,6}[-_]?\d{2,}$/.test(erpRaw) ? erpRaw.toUpperCase() : '';
+                let erp = /^[A-Za-z]{2,6}[-_]?\d{2,}(-\d{2,})?$/.test(erpRaw) ? erpRaw.toUpperCase() : '';
                 if (erpRaw && !erp) erpSkip++;
                 if (erp) {
                     if (seenErp[erp]) { plan.warnings.push(line + '행: ERP 자산코드 ' + erp + ' 가 ' + seenErp[erp] + '행과 겹칩니다. 이 줄은 관리번호 없이 처리합니다.'); erp = ''; }
@@ -3953,7 +3971,6 @@
 
                 // 메모: 제조사·제조년월·비고·원본의 오류 표시
                 const memo = [];
-                if (maker) memo.push('제조사: ' + maker);
                 if (col.mfg >= 0 && text(col.mfg)) {
                     const m = row[col.mfg];
                     const d = typeof m === 'number' ? parseExcelDate(m) : null;
@@ -3966,11 +3983,11 @@
                     const md = typeof mv === 'number' ? parseExcelDate(mv) : parseExcelDate(String(mv).length === 7 ? String(mv) + '-01' : mv);
                     mfgYm = md ? md.slice(0, 7) : text(col.mfg);
                 }
-                const ledgerX = { maker: maker, mfgYm: mfgYm, erpRaw: (erpRaw && !/^[A-Za-z]{2,6}[-_]?\d{2,}$/.test(erpRaw)) ? erpRaw : '',
+                const ledgerX = { maker: maker, mfgYm: mfgYm, erpRaw: (erpRaw && !/^[A-Za-z]{2,6}[-_]?\d{2,}(-\d{2,})?$/.test(erpRaw)) ? erpRaw : '',
                     ledgerL: noteCols[0] !== undefined ? text(noteCols[0]) : '', ledgerM: noteCols[1] !== undefined ? text(noteCols[1]) : '' };
                 const notes = noteCols.map(i => text(i)).filter(Boolean);
                 if (notes.length) memo.push('비고: ' + notes.join(' / '));
-                if (erpRaw && !/^[A-Za-z]{2,6}[-_]?\d{2,}$/.test(erpRaw)) memo.push('ERP 자산코드: ' + erpRaw);
+                if (erpRaw && !/^[A-Za-z]{2,6}[-_]?\d{2,}(-\d{2,})?$/.test(erpRaw)) memo.push('ERP 자산코드: ' + erpRaw);
                 if (col.flag >= 0 && text(col.flag)) memo.push('원본 표시 — 취득일 ' + text(col.flag) + ' (제조년월보다 빠름)');
 
                 const status = user ? '사용 중' : '미사용 (보관)';
@@ -3980,6 +3997,10 @@
                 const target = (sn && take(pool.sn[sn.toLowerCase()], erp, name)) || (erp && take(pool.no[erp.toLowerCase()], erp, name)) || (!sn && !erp && take(pool.bare[name.toLowerCase()], erp, name));
                 if (target) {
                     const after = Object.assign({}, target, { name: name, category: cat, model: model, serial: sn, location: location, user: user }, ledgerX);
+                    // 구분·제조사·모델이 그대로면 프로그램에서 붙인 비품명·모델명은 유지 (내보낸 대장을 다시 넣어도 이름이 바뀌지 않게)
+                    if (cat === (target.category || '') && maker === (target.maker || '') && model === (target.model || modelFromName(target))) {
+                        after.name = target.name; after.model = target.model || '';
+                    }
                     if (date) after.date = date;
                     if (cost !== '') after.cost = cost;
                     if (text(col.doc)) after.docNo = text(col.doc);
