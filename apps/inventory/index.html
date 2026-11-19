@@ -61,6 +61,15 @@
         .x-zoom button{width:38px;height:38px;border-radius:12px;border:1px solid #e2e8f0;background:#fff;font-size:20px;font-weight:700;color:#334155;cursor:pointer;flex-shrink:0}
         .x-zoom span{font-size:12px;font-weight:700;color:#4f46e5;min-width:38px;text-align:right}
         .x-zoomnote{font-size:12px;color:#94a3b8;text-align:center;margin:10px 0 0}
+        /* ----- 시리얼 바코드 읽기 ----- */
+        .x-snrow{display:flex;gap:8px}
+        .x-snrow input{flex:1;min-width:0}
+        .x-snbtn{flex-shrink:0;display:flex;align-items:center;gap:5px;padding:0 12px;min-height:44px;border-radius:12px;background:#1e293b;color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+        .x-snnote{font-size:12px;color:#64748b;margin:6px 0 0;line-height:1.5}
+        .x-snnote:empty{display:none}
+        .x-snnote.ok{color:#047857;font-weight:700}.x-snnote.bad{color:#be123c;font-weight:700}
+        .x-snnote .x-mini{margin:4px 4px 0 0}
+        .x-flash{background:#ecfdf5 !important;border-color:#10b981 !important;transition:background .3s}
         /* ----- 입력칸 높이 통일 (날짜 칸 포함) ----- */
         #assetForm input:not([type=file]):not([type=checkbox]):not([type=hidden]), #assetForm select, .x-in:not(textarea){min-height:44px;box-sizing:border-box}
         input[type=date], input[type=datetime-local]{-webkit-appearance:none;appearance:none;display:block;width:100%;line-height:1.25;text-align:left;background-clip:padding-box}
@@ -463,7 +472,7 @@
                                 
                             </select>
                         </div>
-                        <div><label class="block text-sm font-bold text-slate-700 mb-1.5">시리얼 번호 (S/N)</label><input type="text" id="fSerial" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 outline-none transition" placeholder="제품 S/N"></div>
+                        <div><label class="block text-sm font-bold text-slate-700 mb-1.5">시리얼 번호 (S/N)</label><div class="x-snrow"><input type="text" id="fSerial" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 outline-none transition" placeholder="제품 S/N"><label class="x-snbtn" title="라벨 사진의 바코드로 시리얼 읽기"><i data-lucide="scan-barcode" class="w-4 h-4"></i> 바코드<input type="file" accept="image/*" capture="environment" onchange="onSerialPhoto(event)" hidden></label></div><p id="snNote" class="x-snnote"></p></div>
                         <div><label class="block text-sm font-bold text-slate-700 mb-1.5">사용 위치 *</label><input type="text" id="fLocation" list="locList" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 outline-none transition" placeholder="예: 3층 대회의실"></div>
                         <div><label class="block text-sm font-bold text-slate-700 mb-1.5">취득일</label><input type="date" id="fDate" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 outline-none transition"></div>
                         <div><label class="block text-sm font-bold text-slate-700 mb-1.5">취득가액 (원)</label><input type="number" id="fCost" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 outline-none transition" placeholder="숫자만 입력"></div>
@@ -2165,6 +2174,124 @@
         document.addEventListener('gesturestart', e => e.preventDefault());
         document.addEventListener('dblclick', e => { if (e.target.closest && !e.target.closest('input,textarea,select')) e.preventDefault(); }, { passive: false });
 
+        // =====================================================================
+        // 사진 속 바코드로 시리얼 번호 읽기 (무료, 기기 안에서 처리 — 사진을 밖으로 보내지 않음)
+        // =====================================================================
+        const ZXING_URL = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
+        let zxingLoading = null;
+        function loadZXing() {
+            if (window.ZXing) return Promise.resolve(window.ZXing);
+            if (zxingLoading) return zxingLoading;
+            zxingLoading = new Promise((res, rej) => {
+                const s = document.createElement('script');
+                s.src = ZXING_URL;
+                s.onload = () => window.ZXing ? res(window.ZXing) : rej(new Error('바코드 도구 로드 실패'));
+                s.onerror = () => { zxingLoading = null; rej(new Error('바코드 도구를 불러오지 못했습니다. 인터넷 연결을 확인해주세요.')); };
+                document.head.appendChild(s);
+            });
+            return zxingLoading;
+        }
+        function fileToImage(file) {
+            return new Promise((res, rej) => {
+                const url = URL.createObjectURL(file);
+                const img = new Image();
+                img.onload = () => { res(img); setTimeout(() => URL.revokeObjectURL(url), 1000); };
+                img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('사진을 읽을 수 없습니다.')); };
+                img.src = url;
+            });
+        }
+        // 크기·기울기를 바꿔가며 여러 번 시도 (비스듬히 찍은 라벨도 읽히도록)
+        async function decodeBarcodes(img) {
+            const Z = await loadZXing();
+            const hints = new Map();
+            hints.set(Z.DecodeHintType.TRY_HARDER, true);
+            hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.CODE_128, Z.BarcodeFormat.CODE_39, Z.BarcodeFormat.CODE_93,
+                Z.BarcodeFormat.ITF, Z.BarcodeFormat.CODABAR, Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.DATA_MATRIX]);
+            const base = Math.max(img.naturalWidth, img.naturalHeight);
+            let sizes = [1400, 2000, base, 1000].filter((v, i, a) => v <= base && a.indexOf(v) === i);
+            if (base < 1800) sizes.push(Math.min(2400, Math.round(base * 1.6)));   // 작은 사진은 키워서도 시도
+            if (!sizes.length) sizes = [base];
+            const found = new Map();
+            for (const size of sizes) {
+                for (const deg of [0, -3, 3, -6, 6, 90, 87, 93]) {   // 세로로 찍은 사진(라벨이 옆으로 누운 경우)도
+                    await new Promise(r => setTimeout(r, 0));   // 화면이 멈추지 않게 한 번씩 쉬어감
+                    const scale = size / base;
+                    const w = Math.round(img.naturalWidth * scale), h = Math.round(img.naturalHeight * scale);
+                    const rad = deg * Math.PI / 180;
+                    const cw = Math.round(Math.abs(w * Math.cos(rad)) + Math.abs(h * Math.sin(rad)));
+                    const ch = Math.round(Math.abs(w * Math.sin(rad)) + Math.abs(h * Math.cos(rad)));
+                    const cv = document.createElement('canvas');
+                    cv.width = cw; cv.height = ch;
+                    const ctx = cv.getContext('2d', { willReadFrequently: true });
+                    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch);
+                    ctx.translate(cw / 2, ch / 2); ctx.rotate(rad); ctx.drawImage(img, -w / 2, -h / 2, w, h);
+                    const px = ctx.getImageData(0, 0, cw, ch).data;
+                    const lum = new Uint8ClampedArray(cw * ch);
+                    for (let i = 0; i < lum.length; i++) lum[i] = (px[i * 4] * 77 + px[i * 4 + 1] * 150 + px[i * 4 + 2] * 29) >> 8;
+                    const bmp = new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.RGBLuminanceSource(lum, cw, ch)));
+                    try {
+                        const multi = new Z.GenericMultipleBarcodeReader(new Z.MultiFormatReader());
+                        multi.decodeMultiple(bmp, hints).forEach(r => {
+                            const t = String(r.getText() || '').trim();
+                            if (t && !found.has(t)) found.set(t, Z.BarcodeFormat[r.getBarcodeFormat()]);
+                        });
+                    } catch (e) {
+                        try {
+                            const r = new Z.MultiFormatReader().decode(bmp, hints);
+                            const t = String(r.getText() || '').trim();
+                            if (t && !found.has(t)) found.set(t, Z.BarcodeFormat[r.getBarcodeFormat()]);
+                        } catch (e2) {}
+                    }
+                    if (found.size) return [...found.entries()].map(([text, fmt]) => ({ text, fmt }));
+                }
+            }
+            return [];
+        }
+        // 시리얼처럼 보이는 값만 (주소·긴 문장·숫자만 13자리 상품코드 등은 뒤로)
+        function serialScore(c) {
+            const t = c.text;
+            if (/^https?:/i.test(t) || /\s/.test(t) || t.length > 40 || t.length < 5) return 0;
+            if (c.fmt === 'EAN_13' || /^\d{13}$/.test(t)) return 1;
+            return /[A-Z]/i.test(t) && /\d/.test(t) ? 3 : 2;
+        }
+        async function readSerialFromFile(file, auto) {
+            const el = document.getElementById('fSerial');
+            const note = document.getElementById('snNote');
+            const show = (msg, cls) => { if (note) { note.textContent = msg; note.className = 'x-snnote ' + (cls || ''); } };
+            show('사진에서 바코드를 찾는 중…');
+            try {
+                const img = await fileToImage(file);
+                const list = (await decodeBarcodes(img)).filter(c => serialScore(c) > 0).sort((a, b) => serialScore(b) - serialScore(a));
+                if (!list.length) {
+                    show(auto ? '' : '바코드를 찾지 못했습니다. 바코드가 크고 선명하게 나오도록 가까이서 다시 찍어주세요.', auto ? '' : 'bad');
+                    return;
+                }
+                if (list.length === 1 || serialScore(list[0]) > serialScore(list[1])) {
+                    if (el.value.trim() && el.value.trim() !== list[0].text && !confirm('시리얼 칸을 바코드 값으로 바꿀까요?\n\n지금: ' + el.value.trim() + '\n바코드: ' + list[0].text)) { show(''); return; }
+                    el.value = list[0].text;
+                    el.classList.add('x-flash'); setTimeout(() => el.classList.remove('x-flash'), 1200);
+                    show('✓ 바코드에서 읽은 값입니다. 라벨의 S/N과 같은지 확인해주세요.', 'ok');
+                } else {
+                    // 바코드가 여러 개면 고르게 함
+                    show('바코드가 여러 개 있습니다. 시리얼을 골라주세요:', '');
+                    note.innerHTML += list.slice(0, 5).map(c => ' <button type="button" class="x-mini" onclick="pickSerial(this)" data-v="' + esc(c.text) + '">' + esc(c.text) + '</button>').join('');
+                }
+            } catch (e) {
+                show(e.message || String(e), 'bad');
+            }
+        }
+        function pickSerial(btn) {
+            const el = document.getElementById('fSerial');
+            el.value = btn.dataset.v;
+            document.getElementById('snNote').textContent = '✓ 선택한 값을 넣었습니다.';
+            document.getElementById('snNote').className = 'x-snnote ok';
+        }
+        function onSerialPhoto(e) {
+            const f = e.target.files[0];
+            e.target.value = '';
+            if (f) readSerialFromFile(f, false);
+        }
+
         function showDashboard() {
             navStack = [];
             if (navPushed) { navPushed = false; ignorePop = true; try { history.back(); } catch (e) { ignorePop = false; } }
@@ -2506,6 +2633,7 @@
             [...fStatus.options].forEach(o => { if (o.value === STATUS_DISPOSED) o.remove(); });
 
             setFormImage('');
+            if ($('snNote')) { $('snNote').textContent = ''; $('snNote').className = 'x-snnote'; }
 
             if (id) {
                 document.getElementById('formTitle').innerHTML = '<i data-lucide="edit-3" class="text-indigo-600"></i> 정보 수정';
@@ -2579,6 +2707,8 @@
         function handleImageUpload(e) {
             const file = e.target.files[0];
             if (!file) return;
+            // 사진에 시리얼 바코드가 찍혀 있으면 시리얼 칸이 비어 있을 때 자동으로 채움
+            if (!document.getElementById('fSerial').value.trim()) readSerialFromFile(file, true);
 
             // 캔버스로 줄여서 저장 (작은 사진은 키우지 않음)
             const reader = new FileReader();
