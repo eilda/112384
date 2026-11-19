@@ -64,7 +64,15 @@
         .x-scanhead{position:sticky;top:0;z-index:3;background:#fff}
         @media (max-width:640px){.x-scanhead{margin-bottom:12px !important;padding-bottom:10px !important}}
         /* 카메라 화면: 두 손가락으로 확대 */
-        .x-scanwrap{position:relative;touch-action:none;-webkit-user-select:none;user-select:none}
+        .x-scanwrap{position:relative;touch-action:none;-webkit-user-select:none;user-select:none;border-radius:16px;overflow:hidden}
+        /* 스캐너 기본 어둡게 처리는 쓰지 않고, 보이는 화면 가운데에 직접 인식 틀을 그림 */
+        #reader #qr-shaded-region{display:none !important}
+        .x-scanframe{position:absolute;left:50%;top:50%;width:220px;height:220px;transform:translate(-50%,-50%);border-radius:18px;
+            box-shadow:0 0 0 9999px rgba(15,23,42,.42);pointer-events:none;display:none;z-index:2}
+        .x-scanframe::before{content:"";position:absolute;inset:0;border-radius:18px;border:3px solid #fff;
+            -webkit-mask:linear-gradient(#000 0 0) top left/34px 34px no-repeat,linear-gradient(#000 0 0) top right/34px 34px no-repeat,linear-gradient(#000 0 0) bottom left/34px 34px no-repeat,linear-gradient(#000 0 0) bottom right/34px 34px no-repeat;
+            mask:linear-gradient(#000 0 0) top left/34px 34px no-repeat,linear-gradient(#000 0 0) top right/34px 34px no-repeat,linear-gradient(#000 0 0) bottom left/34px 34px no-repeat,linear-gradient(#000 0 0) bottom right/34px 34px no-repeat}
+        .x-scanwrap.live .x-scanframe{display:block}
         .x-zoombadge{position:absolute;right:10px;top:10px;z-index:4;background:rgba(15,23,42,.62);color:#fff;font-size:12px;font-weight:800;border-radius:999px;padding:4px 10px;pointer-events:none;display:none}
         .x-zoombadge.on{display:block}
         /* ----- 슬라이드 메뉴 ----- */
@@ -700,6 +708,7 @@
             </div>
             <div id="scanWrap" class="x-scanwrap">
                 <div id="reader" class="overflow-hidden rounded-2xl border-2 border-slate-100 bg-slate-50"></div>
+                <div id="scanFrame" class="x-scanframe"></div>
                 <span id="scanZoomVal" class="x-zoombadge">1.0×</span>
             </div>
             <p id="scanZoomNote" class="x-zoomnote" style="display:none"></p>
@@ -2123,7 +2132,6 @@
 
         function handleLogout() {
             if (typeof closeDrawer === 'function') closeDrawer();
-            guardOn = false;
             navStack = [];
             costShown = false;
             currentUser = null;
@@ -2146,10 +2154,45 @@
         //  로그인하면 브라우저 기록을 하나(guard) 쌓아두고, 뒤로가기가 눌릴 때마다
         //  ① 열린 메뉴·작은 창 닫기 → ② 바로 전 화면 → ③ 첫 화면에서는 아무 일 없음(로그아웃은 메뉴에서)
         //  을 처리한 뒤 기록을 다시 쌓음 → 뒤로가기로 로그인 화면이나 사이트 밖으로 나가지 않음
-        let guardOn = false;
-        function armBackGuard() {
-            try { history.pushState({ guard: 1 }, ''); guardOn = true; } catch (e) {}
+        // ===== 휴대폰 뒤로가기(아이폰 쓸어 넘기기 포함) = 프로그램 안에서 한 단계씩 =====
+        // 열린 화면·창 개수만큼 브라우저 기록을 맞춰 두고, 뒤로가기 한 번에 하나씩 닫는다.
+        // (아이폰 사파리는 버튼을 누르지 않은 상태에서 만든 기록을 건너뛰기 때문에,
+        //  기록은 항상 사용자가 누른 직후에만 추가한다.)
+        let histDepth = 0;        // 지금 쌓아 둔 프로그램 기록 수
+        let histIgnore = 0;       // 프로그램이 직접 되돌린 기록 (popstate 무시)
+        function appDepth() {
+            const main = document.getElementById('mainLayout');
+            if (!main || main.classList.contains('hidden') || !currentUser) return 0;
+            let d = 0;
+            const dash = document.getElementById('dashboardView');
+            d += Math.max(navStack.length, dash && dash.classList.contains('hidden') ? 1 : 0);
+            const scanner = document.getElementById('scannerModal');
+            if (scanner && !scanner.classList.contains('hidden')) d++;
+            d += document.querySelectorAll('.x-modal.open').length;
+            d += ['staffModal', 'managerModal', 'categoryModal', 'pwModal'].filter(id => { const m = document.getElementById(id); return m && !m.classList.contains('hidden'); }).length;
+            const lpm = document.getElementById('labelPrintModal');
+            if (lpm && lpm.classList.contains('lp-open')) d++;
+            if (typeof drawerOpen === 'function' && drawerOpen()) d++;
+            return d;
         }
+        function histSync() {
+            const want = appDepth();
+            if (want > histDepth) {
+                try {
+                    while (histDepth < want) { histDepth++; history.pushState({ appDepth: histDepth }, ''); }
+                } catch (e) {}
+            } else if (want < histDepth) {
+                // 화면 안 버튼(✕, 뒤로, 저장 등)으로 닫은 만큼 기록도 되돌림
+                const n = histDepth - want;
+                histDepth = want;
+                histIgnore++;
+                try { history.go(-n); } catch (e) { histIgnore--; }
+            }
+        }
+        let histSyncTimer = 0;
+        function histSyncSoon() { clearTimeout(histSyncTimer); histSyncTimer = setTimeout(histSync, 0); }
+        ['click', 'change', 'keyup'].forEach(ev => document.addEventListener(ev, histSyncSoon, true));
+        function armBackGuard() { histSyncSoon(); }
         // 맨 위의 작은 창·메뉴 하나 닫기 (닫았으면 true)
         function closeTopOverlay() {
             const scanner = document.getElementById('scannerModal');
@@ -2239,12 +2282,24 @@
             navRender();
         }
 
-        window.addEventListener('popstate', () => {
+        window.addEventListener('popstate', e => {
             if (readQrHash()) return;   // QR 주소(#a=…)로 바뀐 것은 hashchange에서 처리
+            const now = (e.state && e.state.appDepth) || 0;
+            if (histIgnore > 0) { histIgnore--; histDepth = now; return; }
             const main = document.getElementById('mainLayout');
-            if (!main || main.classList.contains('hidden') || !currentUser) return;
-            armBackGuard();   // 기록을 다시 쌓아 다음 뒤로가기도 프로그램 안에서 처리
-            appBack();        // 창 닫기 → 전 화면 → (첫 화면이면 그대로)
+            if (!main || main.classList.contains('hidden') || !currentUser) { histDepth = now; return; }
+            if (now < histDepth) {
+                // 뒤로가기 한 번 = 창 하나 닫기 또는 전 화면 하나
+                let steps = histDepth - now;
+                histDepth = now;
+                while (steps-- > 0) { if (!appBack()) break; }
+                // 닫은 뒤에도 열린 게 기록보다 적으면 남은 기록 정리
+                if (appDepth() < histDepth) histSync();
+            } else {
+                // 앞으로 가기는 지원하지 않음: 원래 위치로 되돌림
+                const extra = now - histDepth;
+                if (extra > 0) { histIgnore++; try { history.go(-extra); } catch (err) { histIgnore--; } }
+            }
         });
 
         // ===== 보기 방식 (카드 / 목록) =====
@@ -2405,19 +2460,31 @@
         // ----- 카메라 화면이 휴대폰 화면보다 커지지 않게: 세로로 긴 영상은 가운데만 보이게 자르기 -----
         // (인식 영역은 영상 가운데라 그대로이고, 보이는 부분만 줄어듦)
         function fitScanView() {
+            const wrap = document.getElementById('scanWrap');
             const reader = document.getElementById('reader');
             const video = reader && reader.querySelector('video');
-            const kids = reader ? [...reader.children] : [];
-            if (!video) { if (reader) reader.style.height = ''; return; }
-            kids.forEach(k => { k.style.transform = ''; });
+            if (!video) { if (reader) reader.style.height = ''; if (wrap) wrap.classList.remove('live'); return; }
+            video.style.transform = '';
             reader.style.height = '';
-            const vh = video.getBoundingClientRect().height;
+            const vw = video.clientWidth, vh = video.clientHeight;
+            if (!vw || !vh) return;
             const cap = Math.round(Math.max(260, Math.min(window.innerHeight * 0.5, 460)));
             if (vh > cap + 4) {
-                const off = (vh - cap) / 2;
                 reader.style.height = cap + 'px';
-                kids.forEach(k => { k.style.transform = 'translateY(' + (-off) + 'px)'; });
+                video.style.transform = 'translateY(' + (-(vh - cap) / 2) + 'px)';
             }
+            // 인식 영역을 지금 영상 크기 기준으로 다시 가운데에 맞춤
+            // (아이폰은 카메라가 켜지는 순간의 크기가 실제와 달라 인식 영역이 위로 치우치는 경우가 있음)
+            // 보이는 화면 크기에 맞춘 정사각형 인식 영역 (영상 가운데)
+            const box = Math.round(Math.max(160, Math.min(300, Math.min(vw, vh, cap) * 0.72)));
+            const sc = html5QrcodeScanner;
+            if (sc && sc.qrRegion && sc.canvasElement) {
+                sc.qrRegion = { x: (vw - box) / 2, y: (vh - box) / 2, width: box, height: box };
+                sc.canvasElement.width = box; sc.canvasElement.height = box;
+            }
+            const f = document.getElementById('scanFrame');
+            f.style.width = f.style.height = box + 'px';
+            wrap.classList.add('live');
         }
         (function watchScanView() {
             const reader = document.getElementById('reader');
@@ -2427,7 +2494,7 @@
             new MutationObserver(() => {
                 later();
                 const v = reader.querySelector('video');
-                if (v && !v._fitBound) { v._fitBound = true; v.addEventListener('loadedmetadata', later); v.addEventListener('resize', later); }
+                if (v && !v._fitBound) { v._fitBound = true; v.addEventListener('loadedmetadata', later); v.addEventListener('resize', later); v.addEventListener('playing', later); }
             }).observe(reader, { childList: true });
             window.addEventListener('resize', later);
         })();
@@ -3663,6 +3730,7 @@
             }
             $('scanZoomNote').style.display = 'none'; scanZoomCap = null;
             const rd = document.getElementById('reader'); if (rd) rd.style.height = '';
+            $('scanWrap').classList.remove('live');
             modal.classList.add('opacity-0'); content.classList.add('scale-95');
             setTimeout(() => modal.classList.add('hidden'), 300);
             if (scanMode === 'audit') renderAudit();
@@ -4990,7 +5058,7 @@
             clearQrHash();
             if (currentUser) {
                 if (!assets.some(a => a.id === id) && syncOn()) await syncNow(true);
-                if (assets.some(a => a.id === id)) { showDetail(id); return; }
+                if (assets.some(a => a.id === id)) { showDetail(id); histSyncSoon(); return; }
             }
             showQrLookup(id);
         }
