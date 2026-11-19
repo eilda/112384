@@ -3920,7 +3920,13 @@
                     if (!user) { after.dueDate = ''; after.userSince = ''; }
                     else if (user !== target.user) { after.userSince = todayStr(); after.dueDate = ''; }
                     const changes = describeChanges(target, after);
-                    if (!changes.length) { plan.same++; continue; }
+                    if (!changes.length) {
+                        // 눈에 보이는 항목은 같아도, 대장 원본 칸(제조사·제조년월·L·M열 등)만 다르면 조용히 채워 넣음
+                        const lx = ['maker', 'mfgYm', 'erpRaw', 'ledgerL', 'ledgerM'].some(k => String(target[k] == null ? '' : target[k]) !== String(after[k] == null ? '' : after[k]));
+                        if (lx) plan.updates.push({ id: target.id, after: after, changes: [], quiet: true });
+                        else plan.same++;
+                        continue;
+                    }
                     plan.updates.push({ id: target.id, after: after, changes: changes });
                 } else {
                     const catDef = categories.find(c => c.name === cat);
@@ -4046,14 +4052,17 @@
         function showImportPreview(fileName, sheetName) {
             const p = pendingImport;
             const nothing = !p.creates.length && !p.updates.length;
+            const quiet = p.updates.filter(u => u.quiet).length;
             let h = '<p class="x-desc">' + esc(fileName) + ' · 시트 ‘' + esc(sheetName) + '’</p>' +
-                '<div class="x-sum"><div><b>' + p.creates.length + '</b><span>새로 등록</span></div><div><b>' + p.updates.length + '</b><span>기존 비품 수정</span></div>' +
-                '<div><b>' + p.same + '</b><span>변경 없음</span></div><div class="' + (p.errors.length ? 'bad' : '') + '"><b>' + p.errors.length + '</b><span>오류(건너뜀)</span></div></div>';
+                '<div class="x-sum"><div><b>' + p.creates.length + '</b><span>새로 등록</span></div><div><b>' + (p.updates.length - quiet) + '</b><span>기존 비품 수정</span></div>' +
+                '<div><b>' + (p.same + quiet) + '</b><span>변경 없음</span></div><div class="' + (p.errors.length ? 'bad' : '') + '"><b>' + p.errors.length + '</b><span>오류(건너뜀)</span></div></div>';
+            if (quiet) h += '<p class="x-desc">이 중 <b>' + quiet + '건</b>은 화면에 보이는 정보는 같고, 자산대장 내보내기용 원본 칸(제조사·제조년월·메모 칸)만 채워 넣습니다.</p>';
             if (p.format) h += '<p class="x-desc"><b>' + esc(p.format) + '</b><br>비품명 = 구분+제조사+모델명 · 분류 = 구분 · 사용 위치 = 사용부서 · 관리번호 = ERP 자산코드 · 사용자가 있으면 ‘사용 중’, 없으면 ‘미사용 (보관)’</p>';
             if (p.warnings && p.warnings.length) h += '<p class="x-flabel">확인 필요 — 등록은 진행됩니다</p><ul class="x-plist warn">' + p.warnings.slice(0, 30).map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>';
             if (p.newCats.length) h += '<p class="x-desc">새 분류로 추가됩니다: <b>' + esc(p.newCats.join(', ')) + '</b> (기본 내용연수 5년 — 분류 관리에서 수정)</p>';
-            if (p.updates.length) h += '<p class="x-flabel">수정 내용</p><ul class="x-plist">' + p.updates.slice(0, 30).map(u => '<li><b>' + esc(u.after.name) + '</b> ' + esc(u.changes.join(' / ')) + '</li>').join('') +
-                (p.updates.length > 30 ? '<li>… 외 ' + (p.updates.length - 30) + '건</li>' : '') + '</ul>';
+            const shownUps = p.updates.filter(u => !u.quiet);
+            if (shownUps.length) h += '<p class="x-flabel">수정 내용</p><ul class="x-plist">' + shownUps.slice(0, 30).map(u => '<li><b>' + esc(u.after.name) + '</b> ' + esc(u.changes.join(' / ')) + '</li>').join('') +
+                (shownUps.length > 30 ? '<li>… 외 ' + (shownUps.length - 30) + '건</li>' : '') + '</ul>';
             if (p.errors.length) h += '<p class="x-flabel">오류 — 이 줄들은 반영되지 않습니다</p><ul class="x-plist bad">' + p.errors.slice(0, 30).map(x => '<li>' + esc(x) + '</li>').join('') +
                 (p.errors.length > 30 ? '<li>… 외 ' + (p.errors.length - 30) + '건</li>' : '') + '</ul>';
             if (nothing) h += '<p class="x-empty">반영할 내용이 없습니다.</p>';
@@ -4084,7 +4093,7 @@
                 if (idx === -1) return;
                 if (!isAdmin) u.after.cost = assets[idx].cost;
                 u.after.history = (assets[idx].history || []).slice();
-                addHistory(u.after, '수정', '엑셀 일괄 수정: ' + u.changes.join(' / '));
+                if (!u.quiet) addHistory(u.after, '수정', '엑셀 일괄 수정: ' + u.changes.join(' / '));
                 touch(u.after);
                 assets[idx] = u.after;
             });
